@@ -63,13 +63,15 @@ const ScreenForm = () => {
         e.preventDefault();
 
         const screenNumber = screen.screenNumber.trim();
+
+
         const totalSeats = parseInt(screen.totalSeats, 10);
 
-        if (isNaN(totalSeats) || totalSeats < 1) {
-            toast.error('Total seats must be a valid number greater than 0.');
-            return;
-        }
-
+        // if (isNaN(totalSeats) || totalSeats < 1) {
+        //     toast.error('Total seats must be a valid number greater than 0.');
+        //     return;
+        // }
+        console.log('totalSeats:', totalSeats);
         if (!screen.theaterId) {
             toast.error('Please select a theater.');
             return;
@@ -78,9 +80,10 @@ const ScreenForm = () => {
         const screenToSubmit = {
             theaterId: screen.theaterId,
             screenNumber,
-            totalSeats
+            totalSeats: isNaN(Number(totalSeats)) ? 0 : Number(totalSeats)
         };
-
+        console.log('totalSeats:', totalSeats);
+        console.log('Submitting screen:', screenToSubmit);
         const request = id
             ? axios.put(`http://localhost:8080/api/admin/screens/${id}`, screenToSubmit)
             : axios.post(`http://localhost:8080/api/admin/screens`, screenToSubmit);
@@ -135,7 +138,7 @@ const ScreenForm = () => {
                                 fullWidth
                                 required
                             />
-{/* 
+                            {/* 
                             <TextField
                                 label="Total Seats"
                                 name="totalSeats"
@@ -161,6 +164,7 @@ const ScreenForm = () => {
                                     variant="contained"
                                     color="primary"
                                     startIcon={<Save />}
+                                    onClick={handleSubmit}
                                 >
                                     {id ? 'Update' : 'Add'}
                                 </Button>

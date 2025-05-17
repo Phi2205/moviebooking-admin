@@ -16,16 +16,19 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
+  InputBase,
+  TextField,
   ToggleButton,
   ToggleButtonGroup
 } from '@mui/material';
-
+import FormHelperText from '@mui/material/FormHelperText';
 import { Refresh } from '@mui/icons-material';
-
+import { toast } from 'react-toastify';
 import { Save, ArrowBack, Add, ContentCopy } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
+import axios from 'axios';
 
 const SeatSetupForm = () => {
   const { id: screenId } = useParams();
@@ -33,6 +36,8 @@ const SeatSetupForm = () => {
 
   const [rows, setRows] = useState(5);
   const [cols, setCols] = useState(8);
+  const [newCols, setNewCols] = useState(8);
+  const [newRows, setNewRows] = useState(5);
   const [seats, setSeats] = useState([]);
   const [selectedSeatType, setSelectedSeatType] = useState('available');
   const [initialSeats, setInitialSeats] = useState([]);
@@ -42,6 +47,18 @@ const SeatSetupForm = () => {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('default');
 
+  const [screen, setScreen] = useState({
+    id: 1,
+    screenNumber: "",
+    totalSeats: 0,
+    theater: {
+      id: 1,
+      name: "",
+      address: "...",
+      city: "",
+      totalScreens: 0,
+    }
+  });
   // For zone selection
   const [zoneSelectionMode, setZoneSelectionMode] = useState(false);
   const [startCell, setStartCell] = useState(null);
@@ -57,7 +74,8 @@ const SeatSetupForm = () => {
     vip: { price: 0, enabled: false },
     couple: { price: 0, enabled: false },
   });
-
+  // const [form, setForm] = useState({available: 0, vip: '', couple: ''});
+  const [errors, setErrors] = useState({ available: '', vip: '', couple: '' });
 
   const seatColors = {
     available: '#4caf50',
@@ -83,6 +101,35 @@ const SeatSetupForm = () => {
       }
     }));
   };
+
+  const setNewRowAndCol = (newRow, newCol) => {
+    if (newRow > 26) {
+      newRow = 26;
+      setNewRows(26);
+    }
+    updateCols(newCol);
+    updateRows(newRows);
+  }
+
+
+  const handleChange = (e) => {
+    // setForm({...form, [e.target.name]: e.target.value });
+    setErrors({ ...errors, [e.target.name]: '' });
+  }
+
+  const validate = () => {
+    const newError = {};
+    if (seatTypes['available'].price <= 0 && seatTypes['available'].enabled) {
+      newError['available'] = 'Vui lòng nhập giá ghế thường';
+    }
+    if (seatTypes['vip'].price <= 0 && seatTypes['vip'].enabled) {
+      newError['vip'] = 'Vui lòng nhập giá ghế VIP';
+    }
+    if (seatTypes['couple'].price <= 0 && seatTypes['couple'].enabled) {
+      newError['couple'] = 'Vui lòng nhập giá ghế đôi';
+    }
+    return newError;
+  }
 
   // Predefined templates
   const templates = {
@@ -217,6 +264,11 @@ const SeatSetupForm = () => {
     const fetchSeats = async () => {
       try {
         try {
+          axios.get(`http://localhost:8080/api/admin/screens/${screenId}`)
+            .then(res => {
+              setScreen(res.data);
+            })
+            .catch(err => toast.error('Lỗi không tải được thông tin phòng chiếu!'));
           const response = await fetch(`http://localhost:8080/api/admin/seatprices/screen/${screenId}`);
           if (!response.ok) throw new Error('Lỗi khi tải giá ghế');
 
@@ -292,6 +344,8 @@ const SeatSetupForm = () => {
         // console.log("seatTypes:", seatTypes);
         setRows(cleanedSeats.length);
         setCols(cleanedSeats[0]?.length || 0);
+        setNewCols(cleanedSeats[0]?.length || 0);
+        setNewRows(cleanedSeats.length);
         setSeats(cleanedSeats);
         setInitialSeats(data);
 
@@ -327,6 +381,7 @@ const SeatSetupForm = () => {
 
 
   const updateRows = (newRowCount) => {
+    if (newRowCount > 26) newRowCount = 26; // Không cho phép số hàng nhỏ hơn 1
     setRows(newRowCount);
     setSeats((prevSeats) => {
       const updated = [...prevSeats];
@@ -495,8 +550,22 @@ const SeatSetupForm = () => {
     });
     return seatList;
   };
-
-  const handleSubmit = async () => {
+  // const isReadyPrice = () => {
+  //   if (seatTypes['available'].enabled === true && seatTypes['available'].price <= 0) {
+  //     alert('Vui lòng nhập giá ghế thường!');
+  //     return false;
+  //   }
+  //   if (seatTypes['vip'].enabled === true && seatTypes['vip'].price <= 0) {
+  //     alert('Vui lòng nhập giá ghế VIP!');
+  //     return false;
+  //   }
+  //   if (seatTypes['couple'].enabled === true && seatTypes['couple'].price <= 0) {
+  //     alert('Vui lòng nhập giá ghế đôi!');
+  //     return false;
+  //   }
+  //   return true;
+  // }
+  const handleSubmit = async (e) => {
     for (let i = 0; i < showtimeList.length; i++) {
       if (showtimeList[i].screenId == screenId) {
         alert('Không thể thay đổi ghế khi có suất chiếu đã được tạo!');
@@ -506,6 +575,13 @@ const SeatSetupForm = () => {
     if (!isSeatsChanged()) {
       alert('Không có thay đổi, không cần lưu.');
       navigate('/screens');
+      return;
+    }
+    e.preventDefault();
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      alert('Vui lòng nhập giá ghế!');
       return;
     }
     if (window.confirm('Bạn có chắc muốn lưu cấu hình ghế này không?')) {
@@ -624,9 +700,125 @@ const SeatSetupForm = () => {
   return (
     <Box sx={{ p: 4, bgcolor: '#121212', color: '#fff' }}>
       <Paper sx={{ p: 3, mb: 4, borderRadius: 3, bgcolor: '#1e1e1e', color: '#fff' }}>
-        <Typography variant="h5" fontWeight="bold" mb={2} color="primary">
-          Setup Seats for Screen ID {screenId}
-        </Typography>
+        <Stack
+          spacing={2}
+          mb={5}
+          sx={{
+            background: "linear-gradient(to right, rgba(25,25,35,0.9), rgba(40,40,50,0.8))",
+            borderRadius: "8px",
+            padding: "16px 20px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            borderLeft: "4px solid #1976d2"
+          }}
+        >
+          {/* Theater info */}
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <Box
+              sx={{
+                bgcolor: "primary.main",
+                color: "white",
+                borderRadius: "50%",
+                width: 40,
+                height: 40,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                mr: 2,
+                fontSize: "1.2rem"
+              }}
+            >
+              🎬
+            </Box>
+
+            <Box>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  color: "rgba(255,255,255,0.7)",
+                  fontWeight: 500,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  fontSize: "0.85rem"
+                }}
+              >
+                Rạp chiếu phim
+              </Typography>
+
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 700,
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  mt: 0.5
+                }}
+              >
+                {screen.theater.name}
+                <Box
+                  component="span"
+                  sx={{
+                    ml: 2,
+                    bgcolor: "primary.main",
+                    color: "white",
+                    fontSize: "0.7rem",
+                    py: 0.5,
+                    px: 1,
+                    borderRadius: "4px"
+                  }}
+                >
+                  PREMIUM
+                </Box>
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Screen info */}
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <Box
+              sx={{
+                bgcolor: "primary.main",
+                color: "white",
+                borderRadius: "50%",
+                width: 40,
+                height: 40,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                mr: 2,
+                fontSize: "1.2rem"
+              }}
+            >
+              📍
+            </Box>
+
+            <Box>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  color: "rgba(255,255,255,0.7)",
+                  fontWeight: 500,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  fontSize: "0.85rem"
+                }}
+              >
+                Phòng chiếu
+              </Typography>
+
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 700,
+                  color: "#fff",
+                  mt: 0.5
+                }}
+              >
+                {screen.screenNumber}
+              </Typography>
+            </Box>
+          </Box>
+        </Stack>
 
         <Stack direction="row" spacing={2} mb={3}>
           <Button
@@ -688,25 +880,214 @@ const SeatSetupForm = () => {
           )}
         </Stack>
 
-        <Stack direction="row" spacing={4} alignItems="center" mb={3}>
-          <Stack spacing={1} direction="row" alignItems="center">
-            <Typography fontWeight="bold" color="#e0e0e0">Hàng (Rows):</Typography>
-            <Button variant="outlined" sx={{ minWidth: 40, fontSize: 20 }} onClick={() => updateRows(Math.max(1, rows - 1))}>−</Button>
-            <Typography variant="h6" width={30} textAlign="center" color="#e0e0e0">{rows}</Typography>
-            <Button variant="outlined" sx={{ minWidth: 40, fontSize: 20 }} onClick={() => updateRows(rows + 1)}>＋</Button>
+        <Stack
+          direction="row"
+          spacing={4}
+          alignItems="center"
+          mb={3}
+          sx={{
+            // background: "linear-gradient(135deg, #1a2035 0%, #121a2d 100%)",
+            padding: "16px 0",
+            // borderRadius: "12px",
+            // boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
+            // border: "1px solid rgba(255, 255, 255, 0.1)"
+          }}
+        >
+          <Stack
+            spacing={1}
+            direction="row"
+            alignItems="center"
+            sx={{
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+              padding: "10px 16px",
+              borderRadius: "8px",
+              border: "1px solid rgba(93, 126, 255, 0.2)"
+            }}
+          >
+            <Typography
+              fontWeight="bold"
+              color="#e0e0e0"
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                "::before": {
+                  content: '""',
+                  display: "inline-block",
+                  width: "8px",
+                  height: "8px",
+                  marginRight: "8px",
+                  backgroundColor: "#5d7eff",
+                  borderRadius: "2px"
+                }
+              }}
+            >
+              Hàng:
+            </Typography>
+
+            <Button
+              variant="outlined"
+              sx={{
+                minWidth: 40,
+                fontSize: 20,
+                height: "40px",
+                borderRadius: "8px",
+                background: "rgba(93, 126, 255, 0.1)"
+              }}
+              onClick={() => setNewRows(Math.max(1, newRows - 1))}
+            >
+              −
+            </Button>
+
+            <InputBase
+              value={newRows}
+              onChange={(e) => setNewRows(Number(e.target.value))}
+              inputProps={{
+                style: {
+                  textAlign: "center",
+                  color: "#e0e0e0",
+                  width: 30,
+                }
+              }}
+              sx={{
+                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+            />
+
+            <Button
+              variant="outlined"
+              style={{
+                minWidth: 40,
+                fontSize: 20,
+                height: "40px",
+                borderRadius: "8px",
+                background: "rgba(93, 126, 255, 0.1)"
+              }}
+              onClick={() => setNewRows(newRows + 1)}
+            >
+              ＋
+            </Button>
           </Stack>
 
-          <Stack spacing={1} direction="row" alignItems="center">
-            <Typography fontWeight="bold" color="#e0e0e0">Cột (Cols):</Typography>
-            <Button variant="outlined" sx={{ minWidth: 40, fontSize: 20 }} onClick={() => updateCols(Math.max(1, cols - 1))}>−</Button>
-            <Typography variant="h6" width={30} textAlign="center" color="#e0e0e0">{cols}</Typography>
-            <Button variant="outlined" sx={{ minWidth: 40, fontSize: 20 }} onClick={() => updateCols(cols + 1)}>＋</Button>
+          <Stack
+            spacing={1}
+            direction="row"
+            alignItems="center"
+            sx={{
+              backgroundColor: "rgba(255, 255, 255, 0.05)",
+              padding: "10px 16px",
+              borderRadius: "8px",
+              border: "1px solid rgba(93, 126, 255, 0.2)"
+            }}
+          >
+            <Typography
+              fontWeight="bold"
+              color="#e0e0e0"
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                "::before": {
+                  content: '""',
+                  display: "inline-block",
+                  width: "8px",
+                  height: "8px",
+                  marginRight: "8px",
+                  backgroundColor: "#5d7eff",
+                  borderRadius: "2px"
+                }
+              }}
+            >
+              Cột:
+            </Typography>
+
+            <Button
+              variant="outlined"
+              sx={{
+                minWidth: 40,
+                fontSize: 20,
+                height: "40px",
+                borderRadius: "8px",
+                background: "rgba(93, 126, 255, 0.1)"
+              }}
+              onClick={() => setNewCols(Math.max(1, newCols - 1))}
+            >
+              −
+            </Button>
+
+            {/* <Typography
+              variant="h6"
+              width={30}
+              textAlign="center"
+              color="#e0e0e0"
+              sx={{
+                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                border: "1px solid rgba(255, 255, 255, 0.1)"
+              }}
+            >
+              {cols}
+            </Typography> */}
+
+
+            <InputBase
+              value={newCols}
+              onChange={(e) => setNewCols(Number(e.target.value))}
+              inputProps={{
+                style: {
+                  textAlign: "center",
+                  color: "#e0e0e0",
+                  width: 30,
+                }
+              }}
+              sx={{
+                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                padding: "4px 8px",
+                borderRadius: "4px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+              }}
+            />
+
+
+
+            <Button
+              variant="outlined"
+              sx={{
+                minWidth: 40,
+                fontSize: 20,
+                height: "40px",
+                borderRadius: "8px",
+                background: "rgba(93, 126, 255, 0.1)"
+              }}
+              onClick={() => setNewCols(newCols + 1)}
+            >
+              ＋
+            </Button>
           </Stack>
+          <Stack>
+            <button
+              style={{
+                padding: "20px 30px",
+                minWidth: 40,
+                fontSize: 20,
+                // height: "50px",
+                borderRadius: "8px",
+                background: "rgba(93, 126, 255, 0.1)",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+              onClick={() => setNewRowAndCol(newRows, newCols)}
+            >
+              Áp dụng
+            </button>
+          </Stack>
+
         </Stack>
-
-        <Stack direction="row" spacing={2} mb={3}>
+        {/* <Stack direction="row" spacing={2} mb={3}>
           <FormControl>
-            <InputLabel sx={{ color: "#aaa" }}>Rows</InputLabel>
+            <InputLabel sx={{ color: "#fff" }}>Số hàng ghế</InputLabel>
             <OutlinedInput
               type="number"
               value={rows}
@@ -724,7 +1105,7 @@ const SeatSetupForm = () => {
             />
           </FormControl>
           <FormControl>
-            <InputLabel sx={{ color: "#aaa" }}>Columns</InputLabel>
+            <InputLabel sx={{ color: "#fff"}}>Số cột ghế</InputLabel>
             <OutlinedInput
               type="number"
               value={cols}
@@ -741,7 +1122,18 @@ const SeatSetupForm = () => {
               }}
             />
           </FormControl>
+        </Stack> */}
+        <Stack direction="row" spacing={4} mb={3}>
+          <Stack>
+            <Typography color="#aaa" fontSize={30}>Số hàng ghế : {rows}</Typography>
+          </Stack>
+
+          <Stack>
+            <Typography color="#aaa" fontSize={30}>Số cột ghế : {cols}</Typography>
+
+          </Stack>
         </Stack>
+
 
         <Grid container direction="column" spacing={1}>
           {seats.map((row, rowIndex) => (
@@ -755,7 +1147,7 @@ const SeatSetupForm = () => {
           ))}
         </Grid>
         <Box mt={2} />
-        <Stack direction="row" spacing={3} mb={3} alignItems="center">
+        <Stack direction="row" spacing={10} mb={3} alignItems="center">
           {['available', 'vip', 'couple'].map(type => (
             seatTypes[type].enabled && (  // Chỉ render form khi 'enabled' là true
               <Stack key={type} spacing={1} alignItems="flex-start">
@@ -781,6 +1173,39 @@ const SeatSetupForm = () => {
                     }}
                     disabled={!seatTypes[type].enabled}  // Disable input when 'enabled' is false
                   />
+                  {/* {errors[type] && (
+                    // <FormHelperText>{errors[type]}</FormHelperText>
+                    // <div style={{ color: 'red' }}>{errors[type]}</div>
+                    <FormHelperText
+                      sx={{
+                        color: 'red',            
+                        fontSize: '0.8rem',     
+                        transform: 'translateY(15px)',         
+                        fontWeight: 400      
+                      }}
+                    >
+                      {errors[type]}
+                    </FormHelperText>
+
+
+                  )} */}
+                  <FormControl error={Boolean(errors[type])}>
+                    {/* <OutlinedInput ... /> */}
+                    <FormHelperText
+                      sx={{
+                        color: '#f88',
+                        fontSize: '0.8rem',
+                        fontWeight: 400,
+                        transform: 'translateY(2px) translateX(-15px) scale(0.95)',
+                        minHeight: '20px',                  // Giữ chiều cao cố định
+                        transition: 'all 0.2s ease',
+                        visibility: errors[type] ? 'visible' : 'hidden' // Không làm layout nhảy
+                      }}
+                    >
+                      {errors[type]}
+                    </FormHelperText>
+                  </FormControl>
+
                 </FormControl>
               </Stack>
             )

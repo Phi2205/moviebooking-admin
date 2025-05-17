@@ -34,7 +34,11 @@ const ShowtimeForm = () => {
     const [loadingScreens, setLoadingScreens] = useState(false);
     const [loadingShowtime, setLoadingShowtime] = useState(!!id);
     const [allShowtimes, setAllShowtimes] = useState([]);
-
+    const [seatTypes, setSeatTypes] = useState({
+        available: { price: 0, enabled: false },
+        vip: { price: 0, enabled: false },
+        couple: { price: 0, enabled: false },
+    });
 
     useEffect(() => {
         axios.get('http://localhost:8080/api/admin/movies')
@@ -134,12 +138,21 @@ const ShowtimeForm = () => {
 
 
     }
-    const isUnfinishedScreen = () =>{
-        
+    const isReadyScreen = () => {
+        axios.get(`http://localhost:8080/api/admin/seatprices/screen/${showtime.screenId}`)
+            .then(res => setSeatTypes(res.data || []))
+            .catch(err => toast.error('Error fetching seat prices'));
+        console.log(seatTypes);
+        return true;
     }
+
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        if (!isReadyScreen()) {
+            return;
+        }
+
         const showtimeToSubmit = {
             ...showtime,
             startTime: new Date(showtime.startTime).toISOString()
@@ -150,6 +163,7 @@ const ShowtimeForm = () => {
         if (isShowtimeConflict()) {
             return;
         }
+
         const request = id
             ? axios.put(`http://localhost:8080/api/admin/showtimes/${id}`, showtimeToSubmit)
             : axios.post('http://localhost:8080/api/admin/showtimes', showtimeToSubmit);
@@ -198,7 +212,7 @@ const ShowtimeForm = () => {
 
                             <Autocomplete
                                 options={screens}
-                                getOptionLabel={(option) => `Screen ${option.screenNumber}`}
+                                getOptionLabel={(option) => `${option.screenNumber}`}
                                 value={screens.find(s => s.id === showtime.screenId) || null}
                                 onChange={(e, newValue) => {
                                     setShowtime(prev => ({ ...prev, screenId: newValue?.id || '' }));
